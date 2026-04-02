@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+contract TimeLockedWallet {
+    mapping(address => uint256) public balances;
+    mapping(address => uint256) public unlockTimes;
+    
+    event Deposited(address indexed user, uint256 amount, uint256 unlockTime);
+    event Withdrawn(address indexed user, uint256 amount);
+    
+    function deposit(uint256 _unlockTime) external payable {
+        require(_unlockTime > block.timestamp, "Unlock time must be in future");
+        require(msg.value > 0, "Must send ETH");
+        
+        balances[msg.sender] += msg.value;
+        unlockTimes[msg.sender] = _unlockTime;
+        
+        emit Deposited(msg.sender, msg.value, _unlockTime);
+    }
+    
+    function withdraw() external {
+        uint256 available = availableBalance(msg.sender);
+        require(available > 0, "No funds available");
+        require(block.timestamp >= unlockTimes[msg.sender], "Still locked");
+        
+        balances[msg.sender] = 0;
+        payable(msg.sender).transfer(available);
+        emit Withdrawn(msg.sender, available);
+    }
+    
+    function availableBalance(address user) public view returns (uint256) {
+        if (block.timestamp >= unlockTimes[user]) {
+            return balances[user];
+        }
+        return 0;
+    }
+    
+    function remainingLockTime(address user) external view returns (uint256) {
+        if (block.timestamp >= unlockTimes[user]) {
+            return 0;
+        }
+        return unlockTimes[user] - block.timestamp;
+    }
+    
+    receive() external payable {
+        deposit(block.timestamp + 365 days); // 1 year default lock
+    }
+}

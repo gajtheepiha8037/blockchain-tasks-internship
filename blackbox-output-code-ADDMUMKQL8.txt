@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+contract Crowdfunding {
+    address public admin;
+    uint256 public fundingGoal;
+    uint256 public totalRaised;
+    bool public goalReached;
+    bool public campaignEnded;
+    
+    mapping(address => uint256) public contributions;
+    
+    event Contribution(address indexed contributor, uint256 amount);
+    event GoalReached(uint256 totalAmount);
+    event Refund(address indexed contributor, uint256 amount);
+    event FundsWithdrawn(uint256 amount);
+    
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin");
+        _;
+    }
+    
+    constructor(uint256 _fundingGoal) {
+        admin = msg.sender;
+        fundingGoal = _fundingGoal;
+    }
+    
+    function contribute() external payable {
+        require(!campaignEnded, "Campaign ended");
+        require(msg.value > 0, "Contribution must be > 0");
+        
+        contributions[msg.sender] += msg.value;
+        totalRaised += msg.value;
+        
+        emit Contribution(msg.sender, msg.value);
+        
+        if (totalRaised >= fundingGoal && !goalReached) {
+            goalReached = true;
+            emit GoalReached(totalRaised);
+        }
+    }
+    
+    function withdrawFunds() external onlyAdmin {
+        require(goalReached, "Funding goal not reached");
+        require(!campaignEnded, "Campaign already ended");
+        
+        campaignEnded = true;
+        payable(admin).transfer(address(this).balance);
+        emit FundsWithdrawn(address(this).balance);
+    }
+    
+    function requestRefund() external {
+        require(!goalReached, "Goal reached, no refunds");
+        require(!campaignEnded, "Campaign ended");
+        require(contributions[msg.sender] > 0, "No contribution");
+        
+        uint256 amount = contributions[msg.sender];
+        contributions[msg.sender] = 0;
+        payable(msg.sender).transfer(amount);
+        emit Refund(msg.sender, amount);
+    }
+    
+    receive() external payable {
+        contribute();
+    }
+}

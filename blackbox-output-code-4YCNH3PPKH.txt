@@ -1,0 +1,107 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+contract MultiSigWallet {
+    address[] public owners;
+    uint256 public requiredApprovals;
+    mapping(uint256 => Transaction) public transactions;
+    mapping(uint256 => mapping(address => bool)) public approvals;
+    uint256 public transactionCount;
+    
+    struct Transaction {
+        address to;
+        uint256 value;
+        bytes data;
+        bool executed;
+        uint256 approvalCount;
+    }
+    
+    event TransactionSubmitted(uint256 indexed txId, address indexed to, uint256 value);
+    event TransactionApproved(uint256 indexed txId, address indexed owner);
+    event TransactionExecuted(uint256 indexed txId);
+    
+    modifier onlyOwner() {
+        bool isOwner = false;
+        for (uint i = 0; i < owners.length; i++) {
+            if (owners[i] == msg.sender) {
+                isOwner = true;
+                break;
+            }
+        }
+        require(isOwner, "Not owner");
+        _;
+    }
+    
+    modifier txExists(uint256 _txId) {
+        require(_txId < transactionCount, "Transaction does not exist");
+        _;
+    }
+    
+    modifier notApproved(uint256 _txId) {
+        require(!approvals[_txId][msg.sender], "Already approved");
+        _;
+    }
+    
+    modifier notExecuted(uint256 _txId) {
+        require(!transactions[_txId].executed, "Already executed");
+        _;
+    }
+    
+    constructor(address[] memory _owners, uint256 _requiredApprovals) {
+        require(_owners.length > 0, "Owners required");
+        require(_requiredApprovals > 0 && _requiredApprovals <= _owners.length, "Invalid required approvals");
+        
+        owners = _owners;
+        requiredApprovals = _requiredApprovals;
+    }
+    
+    function submitTransaction(address _to, uint256 _value, bytes memory _data) 
+        external 
+        onlyOwner 
+    {
+        uint256 txId = transactionCount;
+        transactions[txId] = Transaction({
+            to: _to,
+            value: _value,
+            data: _data,
+            executed: false,
+            approvalCount: 0
+        });
+        transactionCount++;
+        
+        emit TransactionSubmitted(txId, _to, _value);
+    }
+    
+    function approveTransaction(uint256 _txId) 
+        external 
+        onlyOwner 
+        txExists(_txId)
+        notApproved(_txId)
+        notExecuted(_txId)
+    {
+        approvals[_txId][msg.sender] = true;
+        transactions[_txId].approvalCount++;
+        
+        emit TransactionApproved(_txId, msg.sender);
+        
+        if (transactions[_txId].approvalCount >= requiredApprovals) {
+            executeTransaction(_txId);
+        }
+    }
+    
+    function executeTransaction(uint256 _txId) 
+        internal 
+        txExists(_txId)
+        notExecuted(_txId)
+    {
+        Transaction storage txn = transactions[_txId];
+        txn.executed = true;
+        
+        (bool success, ) = txn.to.call{value: txn.value}(txn.data);
+        require(success, "Transaction execution failed");
+        
+        emit TransactionExecuted(_txId);
+    }
+    
+    receive() external payable {}
+}

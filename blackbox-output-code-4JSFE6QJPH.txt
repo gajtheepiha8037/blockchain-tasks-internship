@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+contract Voting {
+    address public admin;
+    
+    struct Candidate {
+        string name;
+        uint256 voteCount;
+    }
+    
+    mapping(uint256 => Candidate) public candidates;
+    mapping(address => bool) public hasVoted;
+    uint256 public candidateCount;
+    
+    event VoteCast(address indexed voter, uint256 indexed candidateId, string candidateName);
+    
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin can add candidates");
+        _;
+    }
+    
+    constructor() {
+        admin = msg.sender;
+    }
+    
+    function addCandidate(string memory _name) external onlyAdmin {
+        candidates[candidateCount] = Candidate({
+            name: _name,
+            voteCount: 0
+        });
+        candidateCount++;
+    }
+    
+    function vote(uint256 _candidateId) external {
+        require(_candidateId < candidateCount, "Invalid candidate ID");
+        require(!hasVoted[msg.sender], "You have already voted");
+        
+        hasVoted[msg.sender] = true;
+        candidates[_candidateId].voteCount++;
+        
+        emit VoteCast(msg.sender, _candidateId, candidates[_candidateId].name);
+    }
+    
+    function getVotes(uint256 _candidateId) external view returns (uint256) {
+        require(_candidateId < candidateCount, "Invalid candidate ID");
+        return candidates[_candidateId].voteCount;
+    }
+}

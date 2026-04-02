@@ -1,0 +1,51 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+contract WhitelistAccess {
+    address public admin;
+    mapping(address => bool) public whitelist;
+    
+    uint256 public totalWhitelisted;
+    
+    event Whitelisted(address indexed user);
+    event Delisted(address indexed user);
+    
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin");
+        _;
+    }
+    
+    modifier onlyWhitelisted() {
+        require(whitelist[msg.sender], "Not whitelisted");
+        _;
+    }
+    
+    constructor() {
+        admin = msg.sender;
+        whitelist[msg.sender] = true;
+        totalWhitelisted = 1;
+    }
+    
+    function addToWhitelist(address user) external onlyAdmin {
+        require(!whitelist[user], "Already whitelisted");
+        whitelist[user] = true;
+        totalWhitelisted++;
+        emit Whitelisted(user);
+    }
+    
+    function removeFromWhitelist(address user) external onlyAdmin {
+        require(whitelist[user], "Not whitelisted");
+        whitelist[user] = false;
+        totalWhitelisted--;
+        emit Delisted(user);
+    }
+    
+    // Restricted function - only whitelisted users
+    function restrictedFunction() external onlyWhitelisted {
+        // Premium feature for whitelisted users only
+    }
+    
+    function isWhitelisted(address user) external view returns (bool) {
+        return whitelist[user];
+    }
+}
